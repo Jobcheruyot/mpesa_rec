@@ -16,8 +16,11 @@ with st.form("upload_form"):
 
 if submitted and aspire_file and safaricom_file and key_file:
     with st.spinner("⏳ Processing files..."):
-        output = process_files(aspire_file, safaricom_file, key_file)
-        st.success("✅ Reconciliation Complete")
-        st.download_button("📥 Download Reconciled Report", data=output, file_name="mpesa_reconciliation.xlsx")
+        try:
+            output = process_files(aspire_file, safaricom_file, key_file)
+            st.success("✅ Reconciliation Complete")
+            st.download_button("📥 Download Reconciled Report", data=output, file_name="mpesa_reconciliation.xlsx")
+        except Exception as e:
+            st.error(f"❌ Error: {str(e)}")
 elif submitted:
     st.warning("⚠️ Please upload all 3 required files before starting.")
