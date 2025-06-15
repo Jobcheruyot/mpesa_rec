@@ -1,46 +1,26 @@
 
-import pandas as pd
-from io import BytesIO
+import streamlit as st
+from helpers import process_files
 
-def process_files(aspire_file, safaricom_file, key_file):
-    # Load input files
-    aspire = pd.read_csv(aspire_file)
-    safaricom = pd.read_csv(safaricom_file)
-    key = pd.read_excel(key_file)
+st.set_page_config(page_title="Mpesa Reconciliation App", layout="centered")
 
-    # Prepare store mapping
-    key.columns = ['Original_STORE_NAME', 'Clean_STORE_NAME']
-    store_map = dict(zip(key['Original_STORE_NAME'], key['Clean_STORE_NAME']))
+st.title("📊 Mpesa Reconciliation App")
+st.markdown("Upload Aspire CSV, Safaricom CSV, and Store Key Excel File")
 
-    # Clean Safaricom data
-    if 'STORE_NAME' in safaricom.columns:
-        safaricom['STORE_NAME'] = safaricom['STORE_NAME'].map(store_map).fillna(safaricom['STORE_NAME'])
-    else:
-        raise KeyError("Safaricom file must contain 'STORE_NAME' column.")
+with st.form("upload_form"):
+    aspire_file = st.file_uploader("Upload Aspire CSV", type=["csv"])
+    safaricom_file = st.file_uploader("Upload Safaricom CSV", type=["csv"])
+    key_file = st.file_uploader("Upload Key Excel File", type=["xlsx"])
 
-    # Normalize reference columns for matching
-    if 'TRANSACTION_ID' not in aspire.columns or 'RECEIPT_NUMBER' not in safaricom.columns:
-        raise KeyError("Missing 'TRANSACTION_ID' in Aspire or 'RECEIPT_NUMBER' in Safaricom.")
+    submitted = st.form_submit_button("✅ Start Processing")
 
-    aspire['TRANSACTION_ID'] = aspire['TRANSACTION_ID'].astype(str).str.replace(r'^0+', '', regex=True)
-    safaricom['RECEIPT_NUMBER'] = safaricom['RECEIPT_NUMBER'].astype(str).str.replace(r'^0+', '', regex=True)
-
-    # Merge
-    merged = pd.merge(
-        aspire,
-        safaricom,
-        left_on='TRANSACTION_ID',
-        right_on='RECEIPT_NUMBER',
-        how='left',
-        suffixes=('', '_saf')
-    )
-    merged['Match_Status'] = merged['RECEIPT_NUMBER'].notna().map({True: 'Matched', False: 'Unmatched'})
-
-    # Output to Excel
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        aspire.to_excel(writer, sheet_name='Aspire', index=False)
-        safaricom.to_excel(writer, sheet_name='Safaricom', index=False)
-        merged.to_excel(writer, sheet_name='Reconciled', index=False)
-    output.seek(0)
-    return output
+if submitted and aspire_file and safaricom_file and key_file:
+    with st.spinner("⏳ Processing files..."):
+        try:
+            output = process_files(aspire_file, safaricom_file, key_file)
+            st.success("✅ Reconciliation Complete")
+            st.download_button("📥 Download Reconciled Report", data=output, file_name="mpesa_reconciliation.xlsx")
+        except Exception as e:
+            st.error(f"❌ {str(e)}")
+elif submitted:
+    st.warning("⚠️ Please upload all 3 required files before starting.")
